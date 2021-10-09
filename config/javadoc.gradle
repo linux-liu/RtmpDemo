@@ -1,0 +1,18 @@
+ext {
+    //需要生成doc的module名称
+    javadoc_module = ''//'libTrafficSDK'
+    //需要生成doc的java文件目录
+    javadoc_src_dir = "${javadoc_module}/src/main/java/"
+    //需要参与生成JavaDoc的文件
+    javadoc_src_files = [
+            //'cn/yunovo/nxos/traffic/sdk/Traffic.java',
+            //'cn/yunovo/nxos/traffic/sdk/callback/TrafficInfoListener.java',
+            //'cn/yunovo/nxos/traffic/sdk/bean/TrafficInfo.java'
+    ]
+    //JavaDoc的文件夹名字，最后会删掉
+    javadoc_dst_dir = 'doc/'
+    //项目SDK名字，以项目名称+SDK命名；如nxTraffic的doc，命名为：nxTrafficSDK
+    javadoc_project_name = ''//'nxTrafficSDK'
+    //提交的commit信息，建议修改
+    javadoc_commit_msg = "update ${javadoc_project_name} JavaDoc"
+}

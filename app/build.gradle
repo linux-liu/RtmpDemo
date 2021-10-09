@@ -1,0 +1,151 @@
+apply plugin: 'com.android.application'
+
+def rootAndroid = rootProject.ext.android
+
+def signature = rootProject.ext.signature
+
+def appVersion = rootProject.ext.main_version
+
+def productVersion = rootProject.ext.product_version
+
+def buildTypeDef = rootProject.ext.buildType
+
+def nxos_libs = rootProject.ext.nxos_libs
+
+android {
+    compileSdkVersion rootAndroid.compileSdkVersion
+    buildToolsVersion rootAndroid.buildToolsVersion
+    defaultConfig {
+        applicationId rootAndroid.applicationId
+        minSdkVersion rootAndroid.minSdkVersion
+        targetSdkVersion rootAndroid.targetSdkVersion
+        versionCode getVersionCode(appVersion)
+        versionName getVersionName(null)
+        if (productVersion.size() > 0){
+            flavorDimensions "default"
+        }
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake {
+                cppFlags "-frtti -fexceptions"
+                abiFilters "armeabi-v7a" , "arm64-v8a"
+            }
+        }
+    }
+    signingConfigs {
+        debug {
+            storeFile file(signature.storeFile)
+            keyAlias signature.keyAlias
+            keyPassword signature.keyPassword
+            storePassword signature.storePassword
+        }
+        release {
+            storeFile file(signature.storeFile)
+            keyAlias signature.keyAlias
+            keyPassword signature.keyPassword
+            storePassword signature.storePassword
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+            buildTypeDef.release.each {
+                entry->
+                buildConfigField entry.value.type, entry.value.name, entry.value.value
+            }
+            //            minifyEnabled true
+            //            shrinkResources true
+            //            zipAlignEnabled true
+        }
+        debug {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.debug
+            buildTypeDef.debug.each {
+                entry->
+                buildConfigField entry.value.type, entry.value.name, entry.value.value
+            }
+        }
+    }
+    //多渠道模板，有疑问找时汉文
+    //productFlavors {
+    //    productVersion.each { product ->
+    //        "${product.key}" {
+    //            versionCode getVersionCode(product.value)
+    //            versionName getVersionName(product)
+    //        }
+    //    }
+    //}
+    //配置apk输出路径及apk名称
+    applicationVariants.all {
+        variant->
+        setApkPathAndName(variant, defaultConfig.versionName)
+        def mapPath = getMappingFilePath(variant, defaultConfig.versionName)
+        if (variant.getBuildType().isMinifyEnabled() && mapPath != null) {
+                variant.assemble.doLast {
+                    copy {
+                        from variant.mappingFile
+                        into "${rootDir}/mappings" // freemarker把$'{}'以源码方式显示
+                        rename { String fileName ->
+                            "${mapPath}_mapping.txt" // freemarker把$'{}'以源码方式显示
+                        }
+                    }
+                }
+            }
+    }
+    repositories {
+        flatDir {
+            dirs '../libs/'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }
+}
+
+configurations.all {
+    resolutionStrategy.cacheChangingModulesFor 2, 'hours'
+}
+
+dependencies {
+    implementation 'com.android.support:appcompat-v7:27.1.1'
+    implementation 'com.android.support.constraint:constraint-layout:1.1.0'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    loadDependonLib (it,nxos_libs)
+    dependonsWithChannel(it, productVersion)
+}
+
+/**
+ * 下面的代码功能：会执行单元测试，生成配置文件并放到assets下面，请看下java单元测试下面的ConfigXmlTest.java文件及http://javadoc-in.yunovo.cn/nxPlatformServiceSDK/
+ * 如果需要通过nxSettingsProvider提供配置信息，请放开下面的代码注释，会自动在编译的时候执行单元测试；否则不需要打开注释
+ * 使用单元测试生成配置文件，需要依赖nxSettingsProviderSDK
+ */
+afterEvaluate {
+    tasks.matching {
+        // 以assemble开头的task
+        it.name.startsWith('merge') && it.name.endsWith("Assets")
+    }.each { task ->
+        task.dependsOn(
+                //test, //根据具体情况确定是否注释
+                dependonCfg
+        )  // 任务依赖：执行task之前需要执行dependsOn指定的任务
+    }
+}
+
+//生成依赖配置文件
+
+//获取当前编译的渠道，只有在选择“assemblexxxRelease”格式的命令编译时才能正确生成xxx渠道对应的依赖配置文件，没有渠道的话不影响
+
+task dependonCfg << {
+    generateDependonCfg(nxos_libs)
+}

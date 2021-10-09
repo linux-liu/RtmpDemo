@@ -1,0 +1,101 @@
+ext {
+
+    //android特性配置
+    android = [
+            //记得修改为自己应用的包名
+            applicationId    : 'com.liuxin.rtmpdemo',//"cn.yunovo.nxos.traffic",
+            compileSdkVersion: 27,
+            buildToolsVersion: "26.0.2",
+            //sdk版本
+            minSdkVersion    : 23,
+            targetSdkVersion : 27
+    ]
+
+    //签名信息
+    signature = [
+            storeFile    : '../config/keystore/mtk6735/debug.keystore',
+            keyAlias     : 'androiddebugkey',
+            keyPassword  : 'android',
+            storePassword: 'android',
+    ]
+
+    //主app版本号，逻辑层版本号
+    //如果带渠道版本号，以渠道版本号的versionCode为主
+    //不带渠道版本号，则以主app版本号为主
+    main_version = [
+            versionCode: 1,
+            versionName: '1.0.0'
+    ]
+
+    // 渠道版本号，不同的渠道自己演进
+    product_version = [
+//            mk21: [
+//                    version: 1,
+//            ],
+//            cm01: [
+//                    version: 1,
+//            ],
+//            ms16: [
+//                    version: 1,
+//            ]
+    ]
+
+    //定义BuildConfig常量
+    buildType = [
+            //这个保留
+            release: [
+                    //如果不需要，可以把下面的reject_network去掉
+                    //reject_network: [
+                    //        type : "boolean",
+                    //        name : "USE_REJECT_NETWORK",
+                    //        value: "true"
+                    //]
+            ],
+            //这个保留
+            debug  : [
+                    //如果不需要，可以把下面的reject_network去掉
+                    //reject_network: [
+                    //        type : "boolean",
+                    //        name : "USE_REJECT_NETWORK",
+                    //        value: "false"
+                    //]
+            ]
+    ]
+
+    //SDK版本号,以#开头，后面跟数字，每次升级加一；如果没有对外提供SDK，可以没有version
+    sdk_version = [
+            //version: 's1'
+    ]
+
+    //可以支持所有依赖指令，目前支持四个：implementation、compileOnly、，api、compile等，如果要添加新的请在getSdkInfos中也添加判断，注意大小写要写正确;渠道单独依赖，要加上渠道号，用引号括起来
+    //生成依赖关系文件时，只会读取dependon_libs，不会读取normal_libs
+    //依赖配置文件生成，只识别字符串或files开头的
+    nxos_libs = [
+            // 只放有依赖关系的sdk,写全路径,命名要符合依赖sdk命名规则，见：NXOS 应用依赖关系管理方案 http://wiki.yunovo.cn/x/dhTX
+            dependon_libs: [
+                    //可以放公用的库，所有渠道都引用
+                    //implementation            : [
+                            //文件写法
+                            //files('libs/nxSettingsProvider_cn.yunovo.config_s1.jar'),
+                            //maven写法
+                            //'cn.yunovo.nxos.data.collector:nxDataCollector:s1',
+                            //'cn.yunovo.nxos.traffic.service:nxTrafficService:s2'
+                    //],
+                    //渠道单独依赖，写法如下
+                    //'cm01_yz-zxImplementation': [
+                    //        'cn.yunovo.nxos.carservice:nxCarService:s1'
+                    //]
+            ],
+            // 可以放正常的sdk，没有依赖关系
+            normal_libs  : [
+                    // 渠道单独依赖，写法如下
+                    //'cm01_yz-zxImplementation': [
+                    //        'com.android.support:support-v4:27.+',
+                    //        'com.android.support.constraint:constraint-layout:1.1.3'
+                    //],
+                    //implementation            : [
+                    //        'cn.yunovo.nxos.logdog:nxLogDog:s1'
+                    //]
+            ]
+    ]
+}

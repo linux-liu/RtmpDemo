@@ -1,0 +1,14 @@
+//
+// Created by liuxin on 21-7-13.
+//
+
+#ifndef RTMPDEMO_CONSTANT_H
+#define RTMPDEMO_CONSTANT_H
+#define RTMP_SUCCESS 0;
+#define RTMP_AlREADY_INITED_ERROR 1
+#define RTMP_SET_URL_ERROR 2
+#define RTMP_CONNECT_ERROR 3
+#define RTMP_CONNECT_STREAM_ERROR 4
+#define RTMP_OPEN_FILE_ERROR 5
+
+#endif //RTMPDEMO_CONSTANT_H

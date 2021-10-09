@@ -1,0 +1,37 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+apply from: 'config/config.gradle'
+apply from: 'script/utils.gradle'
+apply from: 'config/javadoc.gradle'
+apply from: 'script/javadocUtils.gradle'
+buildscript {
+    
+    repositories {
+        maven{
+            url "http://maven-in.yunovo.cn/repository/maven-public/"
+        }
+        google()
+        jcenter()
+    }
+    dependencies {
+        // NOTE:请修改gradle/wrapper/gradle-wrapper.properties中的distributionUrl值，把4.x改为4.1
+        classpath 'com.android.tools.build:gradle:3.0.1'
+        
+
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
+    }
+}
+
+allprojects {
+    repositories {
+        maven{
+            url "http://maven-in.yunovo.cn/repository/maven-public/"
+        }
+        google()
+        jcenter()
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}

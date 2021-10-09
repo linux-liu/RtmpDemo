@@ -1,0 +1,95 @@
+/**
+ * 执行命令行,例如：execCmds('git','rev-parse','--short','HEAD')
+ * @param cmds 可变数组
+ * @return
+ */
+def execCmds(String[] cmds) {
+    def stdout = new ByteArrayOutputStream()
+    exec {
+        commandLine cmds
+        standardOutput = stdout
+    }
+    def result = stdout.toString()
+    stdout.close()
+    return result
+}
+
+/**
+ * 获取git用户名
+ * @return
+ */
+def getGitUserName() {
+    def name = execCmds('git', 'config', 'user.name')
+    return name.trim()
+}
+
+/**
+ * 下载javadoc工程
+ * //git clone ssh://shihanwen@gerrit-in.yunovo.cn:29419/yunovo/javadoc && scp -p -P 29419 shihanwen@gerrit-in.yunovo.cn:hooks/commit-msg javadoc/.git/hooks/
+ * @return
+ */
+def downloadJavaDocProject() {
+    def userName = getGitUserName()
+    println('user name:' + userName)
+
+    execCmds('git', 'clone', "ssh://${userName}@gerrit-in.yunovo.cn:29419/yunovo/javadoc")
+    execCmds('scp', '-p', '-P', '29419', "${userName}@gerrit-in.yunovo.cn:hooks/commit-msg", 'javadoc/.git/hooks/')
+
+}
+
+/**
+ * 执行javadoc命令
+ * @return
+ */
+def execJavadoc() {
+    def cmd = ['javadoc', '-encoding', 'utf-8', '-charset', 'utf-8', '-splitindex', '-author', '-version', '-d', javadoc_dst_dir, '-Xdoclint:none', '-public']
+    for (def f : javadoc_src_files) {
+        cmd.add(javadoc_src_dir + f)
+    }
+    if (javadoc_src_files.size() == 0) {
+        fileTree(javadoc_src_dir).each {
+            file -> cmd.add(file)
+        }
+    }
+    def paras = cmd as String[]
+    println(paras.toString())
+    execCmds(paras)
+}
+
+/**
+ * 提交commit信息
+ * @return
+ */
+def commitGitMsg() {
+    def gitSt = execCmds('git', '-C', 'javadoc', 'status', '-s')
+    if (gitSt == null || gitSt == '') {
+        println('no diff')
+        return
+    }
+    execCmds('git', '-C', 'javadoc', 'add', '.')
+    execCmds('git', '-C', 'javadoc', 'commit', '-a', '-m', "[${getGitUserName()}]:${javadoc_commit_msg}")
+    execCmds('git', '-C', 'javadoc', 'push', 'origin', 'HEAD:refs/for/master')
+    execCmds('rm', '-rf', 'javadoc')
+}
+
+/**
+ * 移动生成的doc到javadoc目录
+ * @return
+ */
+def generateDoc() {
+    if (javadoc_module == '' || javadoc_src_files == '' || javadoc_project_name == '') {
+        println('没有赋值相关变量名称')
+        return
+    }
+    execCmds('rm', '-rf', 'javadoc')
+    downloadJavaDocProject()
+    execJavadoc()
+    execCmds('rm', '-rf', "javadoc/${javadoc_project_name}")
+    execCmds('mv', 'doc/', "javadoc/${javadoc_project_name}")
+    commitGitMsg()
+}
+
+//生成JavaDoc的任务，请先在config中的javadoc.gradle中做好配置，再执行这个任务，会自动生成上传javadoc
+task aJavadoc << {
+    generateDoc()
+}

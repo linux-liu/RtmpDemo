@@ -1,0 +1,490 @@
+/**
+ * 生成依赖配置文件dependon.cfg
+ * @param nxosLibs ，是config.gradle中的 nxos_libs 集合
+ */
+def generateDependonCfg(nxosLibs) {
+    def dependon = file('app/src/main/assets/dependon.cfg')
+    //做删除处理，是认为依赖关系只和本应用的逻辑层有关系
+    if (dependon.exists()) {
+        dependon.delete()
+    }
+
+    def dependonList = getSdkInfos(nxosLibs)
+    //依赖列表大小为0时，表示没有依赖SDK，后面不用处理了
+    if (dependonList.size() == 0) {
+        println("list is null")
+        return
+    }
+
+    println("start create cfg dir")
+    def assets = file('app/src/main/assets')
+    println("assets path:" + assets.getAbsolutePath())
+    if (!assets.exists()) {
+        println(assets.mkdir())
+    }
+    println('dependon path:' + dependon.getAbsolutePath())
+    def printWriter = dependon.newPrintWriter()
+    dependonList.each {
+        printWriter.write(it)
+        printWriter.write('\n')
+    }
+    printWriter.flush()
+    printWriter.close()
+}
+
+/**
+ * 云智有依赖关系的SDK的名字规则：appName_appPackageName_sdkVersion.jar,
+ * sdkVersion以s开头，如果没有sdkVersion，不用加入依赖配置文件
+ * @param nxosLibs , 是config.gradle中的 nxos_libs 集合
+ * @return 应用依赖关系集合
+ */
+def getSdkInfos(nxosLibs) {
+    def dependonList = []
+    def channel = getChannel()
+    nxosLibs.each { entry ->
+        println('entry:' + entry)
+        entry.value.each { subEntry ->
+            println('subEntry:' + subEntry)
+            def key = subEntry.key
+            println 'subEntry key:' + key
+            for (i in subEntry.value) {
+                if ('dependon_libs' != entry.key) {
+                    continue
+                }
+                if (channel != null && "" != channel) {
+                    println 'curren channel:' + channel
+                    //根据实际情况添加
+                    if ('implementation' != key && 'compileOnly' != key && 'api' != key && 'compile' != key) {
+                        if (!key.contains(channel)) {
+                            continue
+                        }
+                    }
+                }
+                println("in getSdkInfos,it:" + i)
+                def sdkVersion = ''
+                def appName = ''
+                def appPkgName = ''
+                if (i instanceof ConfigurableFileCollection) {
+                    for (f in i.getFiles()) {
+                        println "file:" + f
+                        def split = f.getPath().split('/')
+                        //sdkName在/线后面，见config.gradle中的 nxos_libs 变量
+                        def sdkName = split[split.length - 1]
+                        println('fileName:' + sdkName)
+                        //见方法的注释，所有项以下划线为分隔符，SDK版本号有的话都是放在最后一项，并以小写s开头
+                        sdkName = sdkName.substring(0, sdkName.lastIndexOf("."))
+                        println('fileName2:' + sdkName)
+                        def sdkNameSplit = sdkName.split('_')
+                        def len = sdkNameSplit.length
+                        //如果解析出来不等于三项,可以确定没有SDK版本号
+                        if (len != 3) {
+                            continue
+                        }
+                        sdkVersion = sdkNameSplit[len - 1]
+                        //SDK版本号以小写s开头
+                        if (!sdkVersion.startsWith('s')) {
+                            println('sdk version is not start with s')
+                            continue
+                        }
+                        appName = sdkNameSplit[0]
+                        appPkgName = sdkNameSplit[1]
+                        dependonList.add(appName + '=' + appPkgName + '_' + sdkVersion)
+                    }
+                } else {
+                    def split = i.split(':')
+                    def len = split.length
+                    if (len != 3) {
+                        continue
+                    }
+                    sdkVersion = split[len - 1]
+                    //SDK版本号以小写s开头
+                    if (!sdkVersion.startsWith('s')) {
+                        println('sdk version is not start with s')
+                        continue
+                    }
+                    appName = split[1]
+                    appPkgName = split[0]
+                    dependonList.add(appName + '=' + appPkgName + '_' + sdkVersion)
+                }
+            }
+        }
+    }
+    return dependonList
+}
+
+/**
+ * 获取当前编译的渠道
+ * @return 当前编译渠道号
+ */
+def getChannel() {
+    def parameter = gradle.getStartParameter()
+    if (parameter != null) {
+        def tasks = parameter.getTaskRequests()
+        if (tasks != null && tasks.size() > 0) {
+            def args = tasks[0].getArgs()
+            if (args != null) {
+                if (args[0] != null) {
+                    return args[0].toLowerCase().replace("assemble", "").replace("release", "").replace("debug", "")
+                }
+            }
+        }
+    }
+    return null
+}
+
+/**
+ * 获取当前渠道配置的framework.jar的路径
+ * @param productVersion 渠道配置 在config.gradle中配置
+ * @param chanel 当前编译渠道
+ * @return 当前framework.jar的路径
+ */
+def getFramework(productVersion, chanel) {
+    if (chanel != null) {
+        def chanelconfig = productVersion.get(chanel)
+        if (chanelconfig != null) {
+            return chanelconfig.framework
+        }
+    }
+    return null
+}
+
+/**
+ * 统计版本号，包括主版本号和渠道版本号
+ * 格式：已version_start开始，已version_end结束
+ * 内容：主版本号为：main_version=xxx；驱动渠道版本号为：渠道号=xxx
+ * 主要是提供jenkins使用，方便统计哪个版本号有变化
+ */
+task getProductVersion << {
+    def main_version = rootProject.ext.main_version
+    def product_version
+    if (rootProject.ext['product_version'] != null) {
+        println("has product_version")
+        product_version = rootProject.ext.product_version
+    } else {
+        println("no product_version")
+    }
+    println('version_start')
+    println('main_version=' + main_version.versionCode)
+    if (product_version != null) {
+        for (def productInfo : product_version) {
+            println(productInfo.key + '=' + productInfo.value.version)
+        }
+    }
+    println('version_end')
+}
+
+/**
+ * 执行命令行,例如：execCmds('git','rev-parse','--short','HEAD')
+ * @param cmds 可变数组
+ * @return
+ */
+def execCmds(String[] cmds) {
+    def result = ""
+    try {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine cmds
+            standardOutput = stdout
+        }
+        result = stdout.toString()
+        stdout.close()
+    } catch (Exception e) {
+        e.printStackTrace()
+    }
+    return result
+}
+
+/**
+ * 获取当前项目git的commitid，本地可能不是最新的，提交后在jenkins上编译是最新的
+ * git rev-parse --short HEAD，获取短commit-id
+ */
+def getCurrentCommitId() {
+    def gitFolder = file('.git')
+    if (!gitFolder.exists()) {
+        return null
+    }
+
+    def commitId = execCmds('git', 'rev-parse', '--short', 'HEAD')
+    println('commitId:' + commitId)
+    return commitId.trim()
+}
+
+/**
+ * 测试任务
+ */
+task getCommitId << {
+    getCurrentCommitId()
+}
+
+/**
+ * 获取渠道名字
+ * @param it
+ * @return
+ */
+def getProductName(it) {
+    def productName
+    if (it.productFlavors != null && it.productFlavors.size() > 0) {
+        productName = it.productFlavors[0].name
+        if (rootProject.hasProperty('PRODUCT_NAME')) {
+            productName = PRODUCT_NAME
+        }
+    }
+    return productName
+}
+
+/**
+ * 获取渠道版本号
+ * @param it
+ * @param appVersionName
+ * @return
+ */
+def getProductVersionName(it, appVersionName) {
+    def productVersionName
+    if (it.productFlavors != null && it.productFlavors.size() > 0) {
+        productVersionName = it.productFlavors[0].versionName
+    } else {
+        productVersionName = appVersionName
+    }
+    return productVersionName
+}
+
+/**
+ * 配置apk输出路径和名称
+ * @param it
+ * @return
+ */
+def setApkPathAndName(it, appVersionName) {
+    println "appVersionName:"+appVersionName
+    def buildType = it.buildType.name
+    def projectName = rootProject.name
+    def fileName
+    def productName = getProductName(it)
+
+    def productVersionName = getProductVersionName(it, appVersionName)
+
+    def createTime = new Date().format("YYYY.MM.dd-HH.mm.ss", TimeZone.getTimeZone("GMT+08:00"))
+    if (rootProject.hasProperty('BUILD_TIME')) {
+        createTime = BUILD_TIME
+    }
+
+    def isUseJenkins = false
+    if (rootProject.hasProperty('JENKINS')) {
+        isUseJenkins = true
+    }
+
+    if (buildType == "release" || isUseJenkins) {
+        it.getPackageApplication().outputDirectory = new File(project.rootDir.absolutePath + "/apks" + (productName != null ? "/${productName}" : ""))
+    }
+
+    it.outputs.each {
+        if (buildType == "release" || isUseJenkins) {
+            fileName = "${projectName}_${productVersionName}_${createTime}-${buildType}.apk"
+            it.outputFileName = fileName
+        }
+    }
+}
+
+def getMappingFilePath(it,appVersionName){
+    def buildType = it.buildType.name
+    def projectName = rootProject.name
+
+    def productVersionName = getProductVersionName(it, appVersionName)
+
+    def createTime = new Date().format("YYYY.MM.dd-HH.mm.ss", TimeZone.getTimeZone("GMT+08:00"))
+    if (rootProject.hasProperty('BUILD_TIME')) {
+        createTime = BUILD_TIME
+    }
+
+    def isUseJenkins = false
+    if (rootProject.hasProperty('JENKINS')) {
+        isUseJenkins = true
+    }
+
+    if (buildType == "release" || isUseJenkins) {
+        return "${projectName}_${productVersionName}_${createTime}-${buildType}"
+    }else{
+        return null
+    }
+}
+
+/**
+ * 统一配置不同渠道framework包的编译依赖方式
+ * @param handler
+ * @return
+ */
+def dependonsWithChannel(DependencyHandler handler, productVersion) {
+    if (productVersion.size() > 0) {
+        productVersion.each {
+            it.each { chanel ->
+                chanel.value.each { dependons ->
+                    if (['CompileOnly', 'Implementation'].contains(dependons.key)) {
+                        dependons.value.each {
+                            handler."${chanel.key}${dependons.key}" it
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 运行后生成的渠道号格式：
+ * product info parse start
+ * mk21:10
+ * cm01:7
+ * ms16:6
+ * product info parse end
+ */
+
+task productInfoTask << {
+    generateProductInfo()
+}
+
+def loadDependonLib(DependencyHandler handler, nxosLib) {
+    nxosLib.each { lib_type ->
+        lib_type.value.each { dependon_type ->
+            dependon_type.value.each { sdk ->
+                if (sdk instanceof String && sdk.contains('yunovo') && !sdk.contains('.jar') && !sdk.contains('.aar')) {
+                    handler."${dependon_type.key}"(sdk) { changing = true }
+                } else {
+                    handler."${dependon_type.key}" sdk
+                }
+            }
+        }
+    }
+}
+
+def generateProductInfo() {
+    def productVersion = rootProject.ext.product_version
+    if (productVersion.size() > 0) {
+        println('product info parse start')
+        productVersion.each {
+            it.each { channel ->
+                channel.value.each {
+                    if ("versionCode".equals(it.key)) {
+                        println(channel.key + ':' + it.value)
+                    }
+                }
+            }
+        }
+        println('product info parse end')
+    }
+}
+
+/**
+ * 获取编译类型
+ * @return
+ */
+def getCompileBuildType() {
+    def parameter = gradle.getStartParameter()
+    if (parameter != null) {
+        def tasks = parameter.getTaskRequests()
+        if (tasks != null && tasks.size() > 0) {
+            def args = tasks[0].getArgs()
+            if (args != null) {
+                for (def i = 0; i < args.size(); i++) {
+                    if (args[i] != null) {
+                        def compileCmd = args[i].toLowerCase()
+                        if (compileCmd.contains('release')) {
+                            return 'R'
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return 'A'
+}
+
+/**
+ * 获取当前分支
+ * @return
+ */
+def getCurrentBranch() {
+    def gitFolder = file('.git')
+    if (!gitFolder.exists()) {
+        return ''
+    }
+    def branch = execCmds('git', 'symbolic-ref', '--short', '-q', 'HEAD')
+    println('branch:' + branch)
+    return branch.trim()
+}
+
+/**
+ * 获取版本类型
+ * @return
+ */
+def getVersionType() {
+    def branch = getCurrentBranch()
+    def buildType = getCompileBuildType()
+    if (branch.equals('master') && buildType.equals('R')) {
+        return 'R'
+    } else if (!branch.equals("develop")) {
+        return 'T'
+    }
+    return 'A'
+}
+
+/**
+ * 获取versionCode
+ * @param version
+ * @return
+ */
+def getVersionCode(version) {
+    return version.versionCode
+}
+
+/**
+ * 获取versionName，带渠道号的和不带渠道号的参数一样
+ * @param product 不带渠道写null，带渠道的要赋值，见app下面的build.gradle
+ * @return
+ */
+def getVersionName(product) {
+    def commitId = getCurrentCommitId()
+    def buildType = getVersionType()
+    def appVersion = rootProject.ext.main_version
+    def sdkVersion = rootProject.ext.sdk_version
+    sdkVersion = (sdkVersion.size() > 0 ? ('_' + sdkVersion.version) : '')
+    commitId = (commitId != null ? ('_' + commitId) : '')
+    if (product == null) {
+        return appVersion.versionName + sdkVersion + '_' + buildType + commitId
+    } else {
+        return product.value.versionName + '_' + product.key + sdkVersion + '_' + buildType + commitId
+    }
+}
+
+/**
+ * 获取jar的名称
+ * @return
+ */
+def getJarName() {
+    def sdkVersion = rootProject.ext.sdk_version
+    def rootAndroid = rootProject.ext.android
+    return rootProject.name + '_' + rootAndroid.applicationId + '_' + sdkVersion.version
+}
+
+/**
+ * 获取jar包使用的sdk版本号
+ * @return
+ */
+def getSDKVersionForJar() {
+    def sdkVersion = rootProject.ext.sdk_version
+    return sdkVersion.size() > 0 ? sdkVersion.version : ''
+}
+
+ext {
+    generateDependonCfg = this.&generateDependonCfg
+    getChannel = this.&getChannel
+    getFramework = this.&getFramework
+    getCurrentCommitId = this.&getCurrentCommitId
+    setApkPathAndName = this.&setApkPathAndName
+    dependonsWithChannel = this.&dependonsWithChannel
+    loadDependonLib = this.&loadDependonLib
+    getVersionType = this.&getVersionType
+    getVersionCode = this.&getVersionCode
+    getVersionName = this.&getVersionName
+    getJarName = this.&getJarName
+    getSDKVersionForJar = this.&getSDKVersionForJar
+    getMappingFilePath = this.&getMappingFilePath
+}
